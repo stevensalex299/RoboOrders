@@ -1,28 +1,26 @@
 # RoboOrders — runbook
 
-How to clone the repo, run the Go API, inject webhook sample orders, and (optionally) run the Vue UI.
-
-Architecture and design: [decisionNotes.md](decisionNotes.md).
+How to run the API, load sample orders, use the web UI, and call the HTTP API. Architecture and design: [decisionNotes.md](decisionNotes.md).
 
 ## Prerequisites
 
 - **Go 1.22+** ([install](https://go.dev/dl/)) — Go module lives in `backend/`
-- **Node.js 18+** (only if running the frontend; Vite 6)
-- **curl** (optional, for manual API checks)
+- **Node.js 18+** (for the frontend; Vite 6)
+- **curl** (optional; examples below use it)
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
 | `backend/` | Go module: API server (`cmd/server`) and ingest CLI (`cmd/ingest`) |
-| `frontend/` | Vue 3 + Tailwind dev UI |
+| `frontend/` | Vue 3 + Tailwind UI |
 | `fixtures/` | Sample webhook jsonl, API jsonl, CSV files |
 
 ---
 
-## Quick start (reviewer path)
+## Quick start
 
-Use **two terminals**. All `go run` commands below assume your working directory is **`backend/`** (required for the Go module).
+Use **two terminals**. All `go run` commands assume your working directory is **`backend/`** (required for the Go module).
 
 ### 1. Start the API
 
@@ -31,41 +29,21 @@ cd backend
 go run ./cmd/server
 ```
 
-You should see: `RoboOrders API listening on :8080`.
+The server listens on **:8080** by default (`RoboOrders API listening on :8080`). If port 8080 is in use, stop the other process or set `ROBO_ORDERS_ADDR=:8081` and use that port for curl/ingest `--http` (the Vue dev proxy expects **8080** by default).
 
-Leave this running. If port 8080 is already in use, stop the other process or set `ROBO_ORDERS_ADDR=:8081` and use that port in curl/ingest `--http` (the Vue dev proxy expects **8080** by default).
+On first run, Go downloads modules automatically (`go mod download` if needed).
 
-**First run:** Go will download modules automatically. If needed: `go mod download`.
+### 2. Load sample webhook orders
 
-### 2. Verify the API
-
-In a second terminal:
-
-```bash
-curl -s http://localhost:8080/health
-```
-
-Expected: `{"status":"ok"}`
-
-### 3. Load sample webhook orders (recommended)
-
-Still from **`backend/`**:
+From **`backend/`** (API may keep running):
 
 ```bash
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl --limit 20 -q
 ```
 
-This replays the **first 20 lines** of `fixtures/webhook_orders.jsonl` into SQLite (**sequential**, one order per line). The server does not need to be stopped; ingest uses the same database file as the API.
+This replays the first 20 lines of `fixtures/webhook_orders.jsonl` into SQLite, one order per line, sequentially. Ingest uses the same database file as the running API.
 
-Confirm orders exist:
-
-```bash
-curl -s http://localhost:8080/orders | head -c 200
-```
-
-### 4. (Optional) Start the UI
-
-From repo root:
+### 3. Start the UI (optional)
 
 ```bash
 cd frontend
@@ -73,7 +51,15 @@ npm install
 npm run dev
 ```
 
-Open the URL printed in the terminal (usually **http://localhost:5173**). The UI polls `GET /orders` through the Vite proxy to **http://localhost:8080**.
+Open the URL Vite prints (usually **http://localhost:5173**). The UI talks to the API through the dev proxy on **http://localhost:8080**.
+
+---
+
+## Using the web UI
+
+- **Order list** — All orders refresh every 5 seconds. Use the status dropdown to filter (`received`, `scheduled`, `dispatched`, `cancelled`).
+- **Order detail** — Click a customer name to open that order: metadata, line items, and event history.
+- **Dispatch** — On the detail page, **Dispatch to robot** is available when the order is `received` or `scheduled`. It sets status to `dispatched` and appends an `order_dispatched` event (robot payload is stored on the event).
 
 ---
 
@@ -84,13 +70,13 @@ Open the URL printed in the terminal (usually **http://localhost:5173**). The UI
 | `ROBO_ORDERS_ADDR` | `:8080` | API listen address |
 | `ROBO_ORDERS_DB` | `data/roboorders.db` (relative to **`backend/`** cwd) | SQLite path |
 
-Schema is applied automatically on startup (`CREATE TABLE IF NOT EXISTS`). The DB file is gitignored under `backend/data/`.
+Schema is applied on startup. The DB file is gitignored under `backend/data/`.
 
 To reset local data: stop the server, delete `backend/data/roboorders.db`, restart the server.
 
 ---
 
-## HTTP API (webhook + reads)
+## HTTP API
 
 Base URL: **http://localhost:8080** (unless you changed `ROBO_ORDERS_ADDR`).
 
@@ -98,40 +84,44 @@ Base URL: **http://localhost:8080** (unless you changed `ROBO_ORDERS_ADDR`).
 |--------|------|-------------|
 | GET | `/health` | Liveness |
 | GET | `/orders` | List orders; optional `?status=received\|scheduled\|dispatched\|cancelled` |
-| GET | `/orders/{id}` | One order by hub UUID (404 if missing) |
+| GET | `/orders/{id}` | One order by hub UUID |
+| GET | `/orders/{id}/events` | Event history for an order |
+| POST | `/orders/{id}/dispatch` | Manual dispatch (`received` or `scheduled` only) |
 | POST | `/webhooks/orders` | Ingest one webhook JSON body (same shape as one line of `webhook_orders.jsonl`) |
 
-### Examples (from any directory)
+### Examples
 
-List all orders:
+List orders:
 
 ```bash
 curl -s 'http://localhost:8080/orders'
-```
-
-Filter by status:
-
-```bash
 curl -s 'http://localhost:8080/orders?status=received'
 ```
 
-Single webhook (manual; run from repo root so the path resolves):
+Ingest one webhook line from the fixture (from repo root):
 
 ```bash
 head -1 fixtures/webhook_orders.jsonl | curl -s -X POST http://localhost:8080/webhooks/orders \
   -H 'Content-Type: application/json' -d @-
 ```
 
-Cancel an existing webhook order: POST again with the same `order_id` and `"update": ["cancelled"]` in the JSON (see cancel lines in the fixture file), or replay a cancel line via the ingest CLI.
+Cancel: POST again with the same `order_id` and `"update": ["cancelled"]`, or replay a cancel line via the ingest CLI (e.g. fixture line 64).
+
+Order detail, events, and dispatch (replace `{id}` with a hub UUID from `GET /orders`):
+
+```bash
+curl -s "http://localhost:8080/orders/{id}"
+curl -s "http://localhost:8080/orders/{id}/events"
+curl -s -X POST "http://localhost:8080/orders/{id}/dispatch"
+```
 
 ---
 
-## Ingest CLI — webhook mock
+## Ingest CLI — webhook
 
-**Important:** Run from **`backend/`** (where `go.mod` lives):
+Run from **`backend/`**:
 
 ```bash
-cd backend
 go run ./cmd/ingest help
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl [options]
 ```
@@ -140,59 +130,48 @@ go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl [options]
 
 | Mode | Flags | Behavior |
 |------|-------|----------|
-| **Direct DB** (default) | no `--http` | Opens `ROBO_ORDERS_DB` and upserts each line. Server may be running (same DB file). |
-| **Via API** | `--http http://localhost:8080` | POST each line to `/webhooks/orders`. Server **must** be running. |
+| **Direct DB** (default) | no `--http` | Upserts into `ROBO_ORDERS_DB`. API may be running (same file). |
+| **Via API** | `--http http://localhost:8080` | POST each line to `/webhooks/orders`. API **must** be running. |
 
-Lines are always processed **sequentially** (one after another).
+Lines are processed **sequentially**.
 
-### Common options
+### Options
 
 | Flag | Meaning |
 |------|---------|
-| `--file PATH` | **Required.** Path to `webhook_orders.jsonl` (from `backend/`, use `../fixtures/webhook_orders.jsonl`) |
-| `--from N` | First line number, 1-based (default `1`) |
+| `--file PATH` | **Required.** e.g. `../fixtures/webhook_orders.jsonl` |
+| `--from N` | First line, 1-based (default `1`) |
 | `--to N` | Last line inclusive (`0` = end of file) |
-| `--limit N` | Max lines to ingest after `--from` |
-| `--delay MS` | Pause between lines (milliseconds) |
-| `-q` | Print summary only |
+| `--limit N` | Max lines after `--from` |
+| `--delay MS` | Pause between lines |
+| `-q` | Summary output only |
 
-### Examples (from `backend/`)
+### Examples
 
 ```bash
-# First 5 orders
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl --limit 5
-
-# Lines 10–20 inclusive
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl --from 10 --to 20
-
-# Replay 50 orders through the HTTP API
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl --http http://localhost:8080 --limit 50 -q
-
-# One cancel payload from the fixture (line 64)
 go run ./cmd/ingest webhook --file ../fixtures/webhook_orders.jsonl --from 64 --limit 1
 ```
 
-Successful runs print a line like: `webhook ingest: N/N ok in ... mode=db` or `mode=http`.
-
 ---
 
-## Inject sample orders (summary)
+## Data sources (fixtures)
 
-| Source | Status | How |
-|--------|--------|-----|
-| **Webhook** | Implemented | `go run ./cmd/ingest webhook` or `POST /webhooks/orders` |
-| **Poll** | Planned | CLI over `fixtures/api_responses.jsonl` |
-| **CSV** | Planned | CLI over `fixtures/orders_*.csv` |
+| Source | How to load today |
+|--------|-------------------|
+| **Webhook** | Ingest CLI or `POST /webhooks/orders` |
+| **Poll** | Not implemented — fixture: `api_responses.jsonl` |
+| **CSV** | Not implemented — fixtures: `orders_1.csv` … `orders_4.csv` |
 
----
-
-## Fixtures
-
-Sample data lives in [`fixtures/`](../fixtures/) at the repo root:
+Files live in [`fixtures/`](../fixtures/):
 
 - `webhook_orders.jsonl` — one JSON order per line (`order_id`, names, `items`, optional `"update": ["cancelled"]`)
-- `api_responses.jsonl` — poll mock (not wired yet)
-- `orders_1.csv` … `orders_4.csv` — CSV mock (not wired yet)
+- `api_responses.jsonl` — poll mock (future)
+- `orders_*.csv` — CSV mock (future)
+
+Further behavior: [decisionNotes.md](decisionNotes.md).
 
 ---
 
@@ -202,13 +181,5 @@ Sample data lives in [`fixtures/`](../fixtures/) at the repo root:
 |-------|------------|
 | `go: cannot find main module` | Run `go run` from **`backend/`**, not repo root |
 | `address already in use` on 8080 | Stop the old process (`lsof -i :8080`) or change `ROBO_ORDERS_ADDR` |
-| UI empty but curl works | Ensure API is on **8080** (Vite proxy default) |
-| Ingest ok but UI unchanged | Wait up to 5s for poll, or change status filter; confirm same DB (default `backend/data/roboorders.db`) |
-
----
-
-## Not implemented yet
-
-- `GET /orders/{id}/events`, dispatch, poll ingest, CSV ingest
-
-See [decisionNotes.md](decisionNotes.md) for planned behavior.
+| UI shows no orders | Ingest sample data; ensure API is on **8080** (Vite proxy default) |
+| Ingest ran but UI unchanged | Wait up to 5s for refresh, or check status filter; same DB as API (`backend/data/roboorders.db` by default) |

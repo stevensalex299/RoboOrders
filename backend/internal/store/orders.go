@@ -139,15 +139,19 @@ func (s *Store) UpsertWebhook(ctx context.Context, p WebhookPayload) (*models.Or
 		payload, _ := json.Marshal(map[string]any{
 			"source": models.SourceWebhook, "sourceId": sourceID, "status": status,
 		})
-		if err := insertEvent(ctx, tx, orderID, "order_created", string(payload), now); err != nil {
+		if err := insertEvent(ctx, tx, orderID, models.EventOrderCreated, string(payload), now); err != nil {
 			return nil, err
 		}
 	} else {
+		writeStatus := status
+		if !cancelled && (prevStatus == models.StatusDispatched || prevStatus == models.StatusCancelled) {
+			writeStatus = prevStatus
+		}
 		_, err = tx.ExecContext(ctx, `UPDATE orders SET
 			first_name = ?, last_name = ?, total = ?, status = ?, notes = ?,
 			restaurant = ?, order_platform = ?, updated_at = ?
 			WHERE id = ?`,
-			p.FirstName, p.LastName, total, status, p.Notes,
+			p.FirstName, p.LastName, total, writeStatus, p.Notes,
 			p.Restaurant, p.OrderSource, now, orderID,
 		)
 		if err != nil {
@@ -157,20 +161,27 @@ func (s *Store) UpsertWebhook(ctx context.Context, p WebhookPayload) (*models.Or
 			payload, _ := json.Marshal(map[string]any{
 				"reason": "webhook update cancelled", "previousStatus": prevStatus,
 			})
-			if err := insertEvent(ctx, tx, orderID, "order_cancelled", string(payload), now); err != nil {
+			if err := insertEvent(ctx, tx, orderID, models.EventOrderCancelled, string(payload), now); err != nil {
 				return nil, err
 			}
 		} else {
-			payload, _ := json.Marshal(map[string]any{
+			evt := map[string]any{
 				"fields": []string{"items", "total", "notes"}, "summary": "webhook upsert",
-			})
-			if err := insertEvent(ctx, tx, orderID, "order_updated", string(payload), now); err != nil {
+			}
+			if writeStatus != status {
+				evt["statusPreserved"] = writeStatus
+			}
+			payload, _ := json.Marshal(evt)
+			if err := insertEvent(ctx, tx, orderID, models.EventOrderUpdated, string(payload), now); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if !cancelled {
+	// Sync line items from payload when present, or on non-cancel upserts.
+	// Cancel-only updates with no items keep existing line items.
+	syncItems := len(p.Items) > 0 || !cancelled
+	if syncItems {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM line_items WHERE order_id = ?`, orderID); err != nil {
 			return nil, err
 		}
@@ -189,12 +200,6 @@ func (s *Store) UpsertWebhook(ctx context.Context, p WebhookPayload) (*models.Or
 		return nil, err
 	}
 	return s.GetOrder(ctx, orderID)
-}
-
-func insertEvent(ctx context.Context, tx *sql.Tx, orderID, typ, payload, at string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO order_events (id, order_id, type, occurred_at, payload)
-		VALUES (?, ?, ?, ?, ?)`, uuid.NewString(), orderID, typ, at, payload)
-	return err
 }
 
 func (s *Store) lineItemsForOrder(ctx context.Context, orderID string) ([]models.LineItem, error) {

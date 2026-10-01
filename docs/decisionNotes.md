@@ -197,6 +197,8 @@ Since there isn't a great way to know whether an order from a poll is identical 
 
 When our source/source id combo is first encountered on ingest, we will create the order and record the order_created event. When encountered again, we will update and record the order_updated event. For any line item updates (api polling), we will make the necessary line item updates and record the appropriate event. If the parent order hasn't been created, we will create it as well. In the case of webhooks, if we receive the update cancelled, we will appropriately update the hub status of that order.
 
+If hub status is already dispatched (manual dispatch) or cancelled, a later webhook line (that isn't cancelling the order) still refreshes order fields and line items and records order_updated, but status stays dispatched or cancelled instead of reverting to received. A cancel webhook always sets cancelled and records order_cancelled. When status is preserved, order_updated may include statusPreserved in the payload. This covers partner retries and out-of-order updates without undoing a dispatch or cancel in our hub.
+
 ### Ingest
 
 For Ingest, I will be using a set of CLI commands against the designated fixture files. These commands will allow ingesting data from the files so the frontend can focus on simply showing orders and historical data. The data will be added to our backend data store so that it can be utilized by our api/frontend.
