@@ -14,3 +14,9 @@ My goal is to leverage existing AI tools, while maintaining my self worked plan.
 - Asked whether CLI ingest (outside Vue) fits the assignment.
 - Asked for a final check of decisionNotes against the assignment before implementation.
 - Asked for help tightening Ingest (fixtures, time_since/cursor); edited suggestions before keeping.
+
+## Session 2 — Project scaffold (2026-09-30)
+
+- Scaffold Go API and Vue frontend aligned with docs/decisionNotes.md (health check only for now).
+- Add Tailwind CSS and remove unused Vite template files; keep API proxy for upcoming /orders routes.
+- Clarify repo docs layout: single root README linking to docs/runbook.md for run instructions.

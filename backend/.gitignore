@@ -1,0 +1,4 @@
+/roboorders.db
+/roboorders.db-*
+*.exe
+/bin/

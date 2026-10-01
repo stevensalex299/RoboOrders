@@ -223,7 +223,7 @@ Currently in the fixture data, only the CSV fixtures carry scheduling hints. For
 
 The frontend will load orders from our Go API layer, the backend database being the source of truth for the data. We will host our orders on a main order screen, where we can filter on status and see general information on our orders. Each row, when clicked, will link to a second page view with more information on each order. On our detail page, we will have more in depth information on the order, a historical view of the order events, and a way to dispatch if the order is of status received or scheduled.
 
-Each view will poll our read API methods on an interval to allow us to see live updates as they are ingested. We can also use Pinia to more effectively hold our API response state.
+Each view will poll our read API methods on an interval to allow us to see live updates as they are ingested. We can also use Pinia to more effectively hold our API response state. Styling uses Tailwind CSS on the Vue frontend for quick list/detail layout and status badges.
 
 ## API Layer
 
