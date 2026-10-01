@@ -99,6 +99,7 @@ The biggest part of the ingesting is properly managing and creating data from th
 
 On our backend, I will merge incoming orders to a strict format so that, regardless of the source, I can easily show and display orders on the frontend. I will also keep the orders distinct based on the source they are coming from, meaning an order from webhook is unique from an order coming from the api poll (no way to correlate them currently). The order format should look similar to the following to properly handle all of our ingest sources:
 
+```
 Order (Unique Key on source, sourceId)
 {
 id: UUID
@@ -164,6 +165,7 @@ items: { name: string, quantity: number, category?: string }[]
 notes: string?
 dispatchedAt: Timestamp
 }
+```
 
 Each order will be merged correctly into a singular order item as they are ingested. The source of ingestion will be defined, alongside any unique id that source provided (CSV will define it's own id). The source and source id provide a way to distinguish between updating an existing order or creating a new one.
 
