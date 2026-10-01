@@ -1,4 +1,5 @@
 /roboorders.db
 /roboorders.db-*
+/data/
 *.exe
 /bin/

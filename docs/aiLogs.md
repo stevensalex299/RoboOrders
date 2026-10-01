@@ -6,17 +6,27 @@ My plan for AI usage in this assignment is to make sure I fully understand the a
 
 My goal is to leverage existing AI tools, while maintaining my self worked plan. I may also bounce ideas back and forth if necessary.
 
-## Session 1 - Design & Fixtures (2026-09-30)
+## Session 1 — Design & Fixtures (2026-09-30)
 
-- Pasted assignment; asked for scope and deliverables.
-- Asked whether ingest paths create orders in our store vs only display them, and whether the poll API is our DB or an external upstream.
-- Asked whether orders can overlap across webhook / poll / CSV or stay separate per source.
-- Asked whether CLI ingest (outside Vue) fits the assignment.
-- Asked for a final check of decisionNotes against the assignment before implementation.
-- Asked for help tightening Ingest (fixtures, time_since/cursor); edited suggestions before keeping.
+- Pasted the assignment — what are the scope and deliverables?
+- Do ingest paths create orders in our store or only display them? For polling, is that our DB or an external upstream?
+- Can orders overlap across webhook / poll / CSV, or should they stay separate per source?
+- Does a CLI ingest path outside Vue fit the assignment?
+- Review decisionNotes against the assignment — anything missing before we implement?
+- Help me tighten the Ingest section (fixtures, time_since/cursor); I edited suggestions before keeping them.
 
 ## Session 2 — Project scaffold (2026-09-30)
 
-- Scaffold Go API and Vue frontend aligned with docs/decisionNotes.md (health check only for now).
-- Add Tailwind CSS and remove unused Vite template files; keep API proxy for upcoming /orders routes.
-- Clarify repo docs layout: single root README linking to docs/runbook.md for run instructions.
+- Scaffold Go API and Vue frontend from decisionNotes health check only for the first slice.
+- Add Tailwind CSS, remove unused Vite template files, and keep the dev proxy aimed at upcoming /orders routes.
+- I want a root README that points reviewers to docs/runbook.md for run instructions.
+
+## Session 3 — Webhook ingest, API, list UI (2026-09-30)
+
+- Implement the webhook slice from decisionNotes: SQLite schema + embedded migrate, orders store with upsert/cancel on (source, sourceId), order events and line items.
+- Scaffold the Go backend layout (cmd/server, cmd/ingest, internal/api, internal/store, internal/models) — I'm learning Go, keep idiomatic but straightforward.
+- Expose GET /health, GET /orders with optional status filter, GET /orders/{id}, POST /webhooks/orders with CORS for the Vue dev server.
+- Build a sequential webhook ingest CLI (--file, --from, --to, --limit, --delay, DB mode and --http); document commands in docs/runbook.md for reviewers.
+- Wire the Vue list: table columns from the API, status dropdown, poll GET /orders every 5s via the Vite proxy.
+- I hit SQLITE_BUSY on parallel/burst ingest — remove burst/concurrency and keep sequential-only for this take-home.
+- Give me a runbook section with curl examples so I can manually verify health, list, filters, get-by-id, webhook POST, and cancel before I sign off.

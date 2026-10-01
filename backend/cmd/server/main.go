@@ -4,19 +4,26 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/stevensalex299/RoboOrders/backend/internal/api"
+	"github.com/stevensalex299/RoboOrders/backend/internal/db"
+	"github.com/stevensalex299/RoboOrders/backend/internal/store"
 )
 
 func main() {
 	addr := envOr("ROBO_ORDERS_ADDR", ":8080")
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
+	sqlDB, err := db.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	srv := &api.Server{Store: store.New(sqlDB)}
+	handler := api.CORS(srv.Handler())
 
 	log.Printf("RoboOrders API listening on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
