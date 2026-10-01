@@ -245,11 +245,12 @@ In regards to fault tolerance, our ingest paths should fail predictably and safe
 
 ## Next Steps
 
-- Hub cancel and schedule by ingest (today): Webhook implements hub cancel (update: cancelled = order_cancelled). CSV implements hub schedule (meal + tomorrow = scheduledFor / scheduled vs received). Poll implements line-level deltas (new lines, status changes, partial 500) on realtime hub orders (the poll mock does not include hub cancel or hub scheduled payloads). If a live poll API sent those, we would set the same hub statuses and events as webhook/CSV rather than inventing a separate model. CSV survey rows have no cancel field—re-upload updates the same order, explicit CSV cancel would be a future convention if the form added one.
-- GET /orders time range — filter by updatedAt or createdAt window for large datasets.
+- Hub cancel and schedule by ingest (today): Webhook implements hub cancel (update: cancelled = order_cancelled). CSV implements hub schedule (meal + tomorrow = scheduledFor / scheduled vs received). Poll implements line-level deltas (new lines, status changes, partial 500) on realtime hub orders (the poll mock does not include hub cancel or hub scheduled payloads). If a live poll API sent those, we would set the same hub statuses and events as webhook/CSV rather than inventing a separate model. CSV survey rows have no cancel field—re-upload updates the same order, explicit CSV cancel would be a future convention if the form added one. I would also base the distinction for our fixed schedule meal times off local time from where the order was scheduled.
+- GET /orders time range/pagination — filter by updatedAt or createdAt window for large datasets. Also adding pagination will make queries faster.
 - Pinia (or similar) — central client cache if the UI grows beyond list + detail.
 - Live poll HTTP — replace fixture jsonl with a real time_since partner API. Keep the same cursor and batch apply logic (today the cursor over api_responses.jsonl stands in for time_since).
 - Poll hub cancel — if the partner API sends cancellations, map to cancelled + order_cancelled (fixtures do not include this today).
 - Scheduling on webhook/poll ingest — CSV already drives scheduled. Extend only if product needs it.
 - Production scale — queue for webhook bursts, Postgres/read replicas, multi-instance deploy (outlined under Scale & Fault Tolerance).
 - Full suite of Unit/Functional tests (testing was done through manual curls and inspecting).
+- Automated hub lifecycle - Background job or partner events to transition order statuses. This may include transitioning from scheduled to received, dispatched to a final state after order is completed, etc.
