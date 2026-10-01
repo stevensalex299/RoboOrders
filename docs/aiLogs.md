@@ -2,7 +2,7 @@
 
 ## How I used AI on this assignment
 
-My plan for AI usage in this assignment is to make sure I fully understand the assignment itself and design/architect it myself. I made it a point to strictly use AI for claryfing any questions about writeup verbiage and any boilerplate code that would add an extensive amount of time to hand write.
+My plan for AI usage in this assignment is to make sure I fully understand the assignment itself and design/architect it myself. I made it a point to strictly use AI for clarifying any questions about writeup verbiage and any boilerplate code that would add an extensive amount of time to hand write.
 
 My goal is to leverage existing AI tools, while maintaining my self worked plan. I may also bounce ideas back and forth if necessary.
 
@@ -40,3 +40,11 @@ My goal is to leverage existing AI tools, while maintaining my self worked plan.
 - Fix Vite dev hard refresh on /orders/{id} — proxy bypass serves index.html when Accept includes text/html so the SPA loads instead of raw JSON.
 - After dispatch or cancel, non-cancel webhook upserts should not reset hub status to received: preserve dispatched/cancelled, still update fields and order_updated; optional statusPreserved in event payload; document in decisionNotes Identity & Upsert.
 - Trim runbook to reviewer-focused run/ingest/UI/API; drop internal QA checklists — I'll delete DB and retest end-to-end before submit.
+
+## Session 5 — Poll & CSV ingest, list polish, fixture behavior (2026-10-01)
+
+- Implement poll ingest from decisionNotes: cursor in ingest_state over api_responses.jsonl, ApplyPollBatch (200/500 partial, line hash upserts, line_status_changed, order_created/updated), ingest poll CLI with --reset-cursor.
+- Implement CSV ingest: hash identity (name + meal + tomorrow), meal/tomorrow = scheduledFor and scheduled vs received at upsert time, repeatable ingest csv --file, skip bad rows; align schema (ingest_state, unique order_id + source_line_id).
+- Add GET /orders?source= and Vue source filter; poll display as Order {sourceId}; formatOrderMeta on detail so csv/poll subtitles are not empty placeholders.
+- List UX: client-side pagination (10 per page), persist source/status/page in URL query via useListQuery so detail = back keeps filters; OrderEventsList scroll cap.
+- Compare final implementation with assignment writeup, check for discrepancies.

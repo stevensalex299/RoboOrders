@@ -39,3 +39,11 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id);
+
+CREATE TABLE IF NOT EXISTS ingest_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_line_items_order_source_line
+    ON line_items (order_id, source_line_id);

@@ -1,6 +1,23 @@
 export function formatName(o) {
   const parts = [o.firstName, o.lastName].filter(Boolean)
-  return parts.length ? parts.join(' ') : '—'
+  if (parts.length) return parts.join(' ')
+  if (o.source === 'external_poll' && o.sourceId) return `Order ${o.sourceId}`
+  return '—'
+}
+
+export function formatOrderMeta(o) {
+  const sourceLabels = {
+    webhook: 'Webhook',
+    external_poll: 'External poll',
+    csv: 'CSV survey',
+  }
+  const parts = [sourceLabels[o.source] || o.source || 'Order']
+  if (o.source === 'external_poll' && o.sourceId) {
+    parts.push(`Order #${o.sourceId}`)
+  }
+  if (o.orderPlatform) parts.push(o.orderPlatform)
+  if (o.restaurant) parts.push(o.restaurant)
+  return parts.join(' · ')
 }
 
 export function formatTotal(o) {
@@ -20,3 +37,10 @@ export function statusClass(status) {
 }
 
 export const ORDER_STATUSES = ['', 'received', 'scheduled', 'dispatched', 'cancelled']
+
+export const ORDER_SOURCES = [
+  { value: '', label: 'All sources' },
+  { value: 'webhook', label: 'Webhook' },
+  { value: 'external_poll', label: 'External poll' },
+  { value: 'csv', label: 'CSV' },
+]

@@ -28,7 +28,9 @@ type LineItem struct {
 }
 
 const (
-	SourceWebhook = "webhook"
+	SourceWebhook      = "webhook"
+	SourceExternalPoll = "external_poll"
+	SourceCSV          = "csv"
 
 	StatusReceived   = "received"
 	StatusScheduled  = "scheduled"

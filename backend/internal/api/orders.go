@@ -9,7 +9,8 @@ import (
 
 func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
-	orders, err := s.Store.ListOrders(r.Context(), status)
+	source := r.URL.Query().Get("source")
+	orders, err := s.Store.ListOrders(r.Context(), status, source)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

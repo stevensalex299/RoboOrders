@@ -95,7 +95,7 @@ There are three methods that data can ingest data including the webhook, csv, an
 
 ### Maintaining & Defining Data
 
-The biggest part of the ingesting is properly managing and creating data from these ingest sources. I want to maintain a common list of orders that I can add/update as I ingest new data from the various sources into the database (source of truth). I believe that using a store (such as Pinia) for caching api responses would be a good way to manage orders on the frontend, as I will need to interact with the store across multiple views.
+The biggest part of the ingesting is properly managing and creating data from these ingest sources. I maintain a common list of orders in SQLite (source of truth) as data is ingested. The Vue UI loads orders via the API with a shared polling composable on list and detail views.
 
 On our backend, I will merge incoming orders to a strict format so that, regardless of the source, I can easily show and display orders on the frontend. I will also keep the orders distinct based on the source they are coming from, meaning an order from webhook is unique from an order coming from the api poll (no way to correlate them currently). The order format should look similar to the following to properly handle all of our ingest sources:
 
@@ -140,14 +140,14 @@ occurredAt: Timestamp
 payload: OrderEventPayload
 }
 
-OrderSourceEnum: "Webhook" | "External Poll" | "CSV"
+OrderSourceEnum (stored values): "webhook" | "external_poll" | "csv"
 OrderStatusEnum: "received" | "scheduled" | "dispatched" | "cancelled"
 LineItemStatusEnum: "ordered" | "processing" | "with_courier" | "delivered"
 OrderEventType: "order_created" |"order_updated" | "line_status_changed" | "order_cancelled" |"order_dispatched"
 
 OrderEventPayload is shaped by the event type:
 order_created: { source, sourceId, status, scheduledFor? }
-order_updated: { fields: string[], summary?: string }
+order_updated: { fields: string[], summary?: string, statusPreserved?: string }
 line_status_changed: { sourceLineId, from, to, itemName? }
 order_cancelled: { reason, previousStatus }
 order_dispatched: { robot: RobotDispatchPayload }
@@ -171,11 +171,9 @@ I also wanted to capture the commonalities between ingest source data in the ord
 
 When it comes down to statuses, I wanted to capture the difference between line-level statuses like with_courier (that are only included in the polling) and the hub-level statuses (such as dispatched, scheduled, cancelled, etc). I also have historical enums for the set of events.
 
-To take in this ingest data, I will need to properly parse it.
-
 ### Parsing Data
 
-Parsing the data will look different depending on the ingest source. I plan to add a set of CLI commands allowing a test user to ingest the data on the backend, rather than directly in the frontend. The frontend will simply respond and show orders/order history.
+Parsing differs by ingest source. cmd/ingest provides webhook, poll, and csv subcommands against the fixture files; the frontend only reads the API and shows orders and event history.
 
 For parsing poll data, we will need to consider whether the api call was a failure, partial failure, or successful. If data was returned, we should always save the order on our end, whether the response is a 500 or not. We don't want to lose orders. In terms of showing errors, we can still make note of the error message through logging so we can track them. Each poll entry has a hash, which we should utilize to know whether line items were updated or created. As we ingest, we will need to add appropriate order events. Status for poll orders has a bit more detail down to the line item, so we can show this info and fall back for other ingest methods to the overall order status.
 
@@ -183,7 +181,7 @@ Parsing webhook and csv data will be a bit simpler. For webhook data, we parse e
 
 ### Backend Storage
 
-Since I merged all ingest sources to one singular order format, I really only need a singular table to hold orders, in very similar format to the objects above. However, I will still want a table for order events, with foreign keys to the designated order. It may also be nice to have an index for our (source, sourceId) relationship for better querying. I can also add a table for order line items and metadata, while keeping track of enums too. Keeping the db simple, with proper querying will allow us to get data fast as we scale up.
+All ingest sources share one order shape in SQLite: orders, line_items, order_events, plus ingest_state for the poll cursor. There is a unique constraint on (source, source_id) and indexes on status, updated time, and (order_id, source_line_id) for line upserts.
 
 ## Application Lifecycle
 
@@ -201,7 +199,7 @@ If hub status is already dispatched (manual dispatch) or cancelled, a later webh
 
 ### Ingest
 
-For Ingest, I will be using a set of CLI commands against the designated fixture files. These commands will allow ingesting data from the files so the frontend can focus on simply showing orders and historical data. The data will be added to our backend data store so that it can be utilized by our api/frontend.
+Ingest uses CLI commands against the fixture files. Data lands in the same SQLite file the API uses so the UI can list, filter, and drill into orders and events.
 
 For polling specifically, our fixture takes the place of the external API we would call with a 'time_since' query parameter.
 
@@ -223,15 +221,14 @@ Currently in the fixture data, only the CSV fixtures carry scheduling hints. For
 
 ## UI Layer
 
-The frontend will load orders from our Go API layer, the backend database being the source of truth for the data. We will host our orders on a main order screen, where we can filter on status and see general information on our orders. Each row, when clicked, will link to a second page view with more information on each order. On our detail page, we will have more in depth information on the order, a historical view of the order events, and a way to dispatch if the order is of status received or scheduled.
-
-Each view will poll our read API methods on an interval to allow us to see live updates as they are ingested. We can also use Pinia to more effectively hold our API response state. Styling uses Tailwind CSS on the Vue frontend for quick list/detail layout and status badges.
+The frontend loads orders from the Go API. SQLite is the source of truth. The list screen supports filters on source and status, shows line counts and totals, and links each row to a detail view. Poll orders without customer names display as Order {sourceId}. Detail shows metadata, line items (including line-level status for poll data), scheduledFor when set, event history, and manual dispatch for received or scheduled. List and detail refresh every 5s via a shared composable. Styling uses Tailwind CSS for layout and status badges.
 
 ## API Layer
 
 Our Go api layer will effectively control how we read data into our frontend layer. We will have the following read endpoints:
 
-- GET /orders (returns a list and can be queried by status/source with optional time range)
+- GET /health (health of the server)
+- GET /orders (list; optional query `status` and `source`)
 - GET /orders/:id (gets the specified order)
 - GET /orders/:id/events (gets the history for an order)
 
@@ -247,3 +244,12 @@ Although we aren't planning for full production scale, we still need to consider
 In regards to fault tolerance, our ingest paths should fail predictably and safely. Our webhook ingest will upsert on order_id so that retries and bursts don't duplicate orders. For polling, we can use a cursor and only advance if batches succeed. CSV processing should skip bad rows and continue the file, this way one bad line doesn't fail the whole upload. Any odd responses can be logged and our order events will be kept for audit purposes.
 
 ## Next Steps
+
+- Hub cancel and schedule by ingest (today): Webhook implements hub cancel (update: cancelled = order_cancelled). CSV implements hub schedule (meal + tomorrow = scheduledFor / scheduled vs received). Poll implements line-level deltas (new lines, status changes, partial 500) on realtime hub orders (the poll mock does not include hub cancel or hub scheduled payloads). If a live poll API sent those, we would set the same hub statuses and events as webhook/CSV rather than inventing a separate model. CSV survey rows have no cancel field—re-upload updates the same order, explicit CSV cancel would be a future convention if the form added one.
+- GET /orders time range — filter by updatedAt or createdAt window for large datasets.
+- Pinia (or similar) — central client cache if the UI grows beyond list + detail.
+- Live poll HTTP — replace fixture jsonl with a real time_since partner API. Keep the same cursor and batch apply logic (today the cursor over api_responses.jsonl stands in for time_since).
+- Poll hub cancel — if the partner API sends cancellations, map to cancelled + order_cancelled (fixtures do not include this today).
+- Scheduling on webhook/poll ingest — CSV already drives scheduled. Extend only if product needs it.
+- Production scale — queue for webhook bursts, Postgres/read replicas, multi-instance deploy (outlined under Scale & Fault Tolerance).
+- Full suite of Unit/Functional tests (testing was done through manual curls and inspecting).

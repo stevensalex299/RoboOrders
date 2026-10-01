@@ -21,14 +21,18 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) ListOrders(ctx context.Context, status string) ([]models.Order, error) {
+func (s *Store) ListOrders(ctx context.Context, status, source string) ([]models.Order, error) {
 	q := `SELECT id, source, source_id, first_name, last_name, total, status, notes,
 		scheduled_for, restaurant, order_platform, created_at, updated_at
-		FROM orders`
+		FROM orders WHERE 1=1`
 	args := []any{}
 	if status != "" {
-		q += ` WHERE status = ?`
+		q += ` AND status = ?`
 		args = append(args, status)
+	}
+	if source != "" {
+		q += ` AND source = ?`
+		args = append(args, source)
 	}
 	q += ` ORDER BY updated_at DESC`
 

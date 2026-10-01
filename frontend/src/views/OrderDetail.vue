@@ -3,9 +3,11 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import OrderEventsList from '../components/OrderEventsList.vue'
 import { usePolling } from '../composables/usePolling'
-import { formatName, formatTotal, statusClass } from '../lib/format'
+import { listQueryFromRoute } from '../composables/useListQuery'
+import { formatName, formatOrderMeta, formatTotal, statusClass } from '../lib/format'
 
 const route = useRoute()
+const backToList = computed(() => ({ path: '/', query: listQueryFromRoute(route.query) }))
 const order = ref(null)
 const events = ref([])
 const loading = ref(true)
@@ -69,19 +71,27 @@ usePolling(loadDetail)
 <template>
   <div>
     <p class="mb-4">
-      <RouterLink to="/" class="text-sm text-sky-700 hover:underline">← Back to orders</RouterLink>
+      <RouterLink :to="backToList" class="text-sm text-sky-700 hover:underline">← Back to orders</RouterLink>
     </p>
 
-    <p v-if="loading" class="text-sm text-gray-500">Loading order…</p>
-    <p v-else-if="error" class="text-sm text-red-600">{{ error }}</p>
+    <p v-if="loading" class="rounded-lg border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 shadow-sm">
+      Loading order…
+    </p>
+    <div
+      v-else-if="error"
+      class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 shadow-sm"
+      role="alert"
+    >
+      {{ error }}
+    </div>
 
     <template v-else-if="order">
       <div class="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 class="text-lg font-semibold">{{ formatName(order) }}</h2>
-            <p class="mt-1 text-sm text-gray-600 capitalize">
-              {{ order.source }} · {{ order.orderPlatform || '—' }} · {{ order.restaurant || '—' }}
+            <p class="mt-1 text-sm text-gray-600">
+              {{ formatOrderMeta(order) }}
             </p>
           </div>
           <span :class="statusClass(order.status)">{{ order.status }}</span>
@@ -105,7 +115,9 @@ usePolling(loadDetail)
         <div v-if="order.lineItems?.length" class="mt-4">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Line items</h3>
           <ul class="mt-2 list-inside list-disc text-sm text-gray-800">
-            <li v-for="li in order.lineItems" :key="li.id">{{ li.itemName }}</li>
+            <li v-for="li in order.lineItems" :key="li.id">
+              {{ li.itemName }}<span v-if="li.status" class="text-gray-500"> · {{ li.status.replaceAll('_', ' ') }}</span>
+            </li>
           </ul>
         </div>
 

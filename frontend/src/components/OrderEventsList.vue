@@ -1,4 +1,6 @@
 <script setup>
+import EmptyState from './EmptyState.vue'
+
 defineProps({
   events: {
     type: Array,
@@ -19,8 +21,10 @@ function formatPayload(payload) {
 <template>
   <section class="rounded-lg border border-gray-200 bg-white shadow-sm">
     <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-gray-800">Event history</h2>
-    <p v-if="events.length === 0" class="px-4 py-6 text-sm text-gray-500">No events recorded yet.</p>
-    <ul v-else class="divide-y divide-gray-100">
+    <EmptyState v-if="events.length === 0" inset title="No events yet">
+      Events appear here when orders are created, updated, dispatched, or cancelled.
+    </EmptyState>
+    <ul v-else class="max-h-96 divide-y divide-gray-100 overflow-y-auto">
       <li v-for="e in events" :key="e.id" class="px-4 py-3 text-sm">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <span class="font-medium capitalize text-gray-900">{{ e.type.replaceAll('_', ' ') }}</span>
