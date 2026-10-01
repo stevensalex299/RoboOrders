@@ -251,6 +251,6 @@ In regards to fault tolerance, our ingest paths should fail predictably and safe
 - Live poll HTTP — replace fixture jsonl with a real time_since partner API. Keep the same cursor and batch apply logic (today the cursor over api_responses.jsonl stands in for time_since).
 - Poll hub cancel — if the partner API sends cancellations, map to cancelled + order_cancelled (fixtures do not include this today).
 - Scheduling on webhook/poll ingest — CSV already drives scheduled. Extend only if product needs it.
-- Production scale — queue for webhook bursts, Postgres/read replicas, multi-instance deploy (outlined under Scale & Fault Tolerance).
+- Production scale — queue for webhook bursts, Postgres/read replicas, multi-instance deploy (outlined under Scale & Fault Tolerance). 100k requests/day can be appropriately handled with the use of Go and indexed SQLite upserts, these production changes will advance that.
 - Full suite of Unit/Functional tests (testing was done through manual curls and inspecting).
 - Automated hub lifecycle - Background job or partner events to transition order statuses. This may include transitioning from scheduled to received, dispatched to a final state after order is completed, etc.
